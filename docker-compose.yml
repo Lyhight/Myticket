@@ -1,0 +1,132 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: myticket
+      MYSQL_USER: myticket
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: mysql+asyncmy://myticket:${MYSQL_PASSWORD}@mysql:3306/myticket
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_BACKEND: redis
+      RATE_LIMIT_REDIS_FAILURE_MODE: ${RATE_LIMIT_REDIS_FAILURE_MODE:-local}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      AGENT_TASK_MAX_ATTEMPTS: ${AGENT_TASK_MAX_ATTEMPTS:-3}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      DEBUG: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: json
+      METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      LLM_ENABLED: ${LLM_ENABLED:-false}
+      EMBEDDING_ENABLED: ${EMBEDDING_ENABLED:-false}
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: mysql+asyncmy://myticket:${MYSQL_PASSWORD}@mysql:3306/myticket
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_BACKEND: redis
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      AGENT_WORKER_POLL_SECONDS: ${AGENT_WORKER_POLL_SECONDS:-1}
+      AGENT_TASK_LEASE_SECONDS: ${AGENT_TASK_LEASE_SECONDS:-60}
+      AGENT_TASK_MAX_ATTEMPTS: ${AGENT_TASK_MAX_ATTEMPTS:-3}
+      AGENT_WORKER_METRICS_PORT: 9101
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      DEBUG: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: json
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      LLM_ENABLED: ${LLM_ENABLED:-false}
+      EMBEDDING_ENABLED: ${EMBEDDING_ENABLED:-false}
+    command: ["python", "run_agent_worker.py"]
+    expose:
+      - "9101"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:

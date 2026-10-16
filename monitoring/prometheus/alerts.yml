@@ -1,0 +1,95 @@
+groups:
+  - name: myticket
+    rules:
+      - alert: MyTicketBackendDown
+        expr: up{job="myticket-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: MyTicket API metrics target is unavailable
+          description: Prometheus has been unable to scrape the API for two minutes.
+
+      - alert: MyTicketWorkerMetricsDown
+        expr: up{job="myticket-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: MyTicket Worker metrics target is unavailable
+          description: The Worker may be stopped or its private metrics server may be unreachable.
+
+      - alert: MyTicketHighHttp5xxRate
+        expr: |
+          sum(rate(myticket_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(myticket_http_requests_total[5m])), 0.001) > 0.05
+          and sum(increase(myticket_http_requests_total[5m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MyTicket HTTP 5xx ratio is above 5%
+          description: The API has sustained an elevated server-error ratio with meaningful traffic.
+
+      - alert: MyTicketHighHttpP95Latency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(myticket_http_request_duration_seconds_bucket[5m]))
+          ) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MyTicket API p95 latency is above 10 seconds
+          description: End-to-end HTTP latency has exceeded the initial demonstration SLO.
+
+      - alert: MyTicketWorkerFailureBurst
+        expr: sum(increase(myticket_worker_tasks_total{outcome="failed"}[10m])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Agent worker tasks are repeatedly failing
+          description: At least three worker task failures occurred during the last ten minutes.
+
+      - alert: MyTicketWorkerLeaseLost
+        expr: sum(increase(myticket_worker_tasks_total{outcome="lease_lost"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: An Agent worker lost its task lease
+          description: Check worker saturation, database latency, and lease/heartbeat settings.
+
+      - alert: MyTicketHighAgentEscalationRate
+        expr: |
+          sum(rate(myticket_agent_runs_total{outcome="escalated"}[15m]))
+          /
+          clamp_min(sum(rate(myticket_agent_runs_total[15m])), 0.001) > 0.5
+          and sum(increase(myticket_agent_runs_total[15m])) >= 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than half of recent Agent runs require escalation
+          description: Review safety rejections, policy coverage, and upstream model behavior.
+
+      - alert: MyTicketToolFailureBurst
+        expr: sum(increase(myticket_tool_executions_total{outcome="failure"}[10m])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Agent tools are repeatedly failing
+          description: At least three tool failures occurred during the last ten minutes.
+
+      - alert: MyTicketRagFallbackBurst
+        expr: |
+          sum(rate(myticket_rag_retrievals_total{outcome="fallback"}[15m]))
+          /
+          clamp_min(sum(rate(myticket_rag_retrievals_total[15m])), 0.001) > 0.3
+          and sum(increase(myticket_rag_retrievals_total[15m])) >= 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: RAG fallback ratio is above 30%
+          description: Inspect embedding availability, hybrid retrieval errors, and knowledge coverage.

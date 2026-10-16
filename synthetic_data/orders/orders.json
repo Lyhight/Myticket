@@ -1,0 +1,10 @@
+{
+  "generated": true,
+  "orders": [
+    {"order_no": "10001", "user_id": "demo-user", "status": "PAID", "shipping_status": "NOT_SHIPPED", "product_name": "无线耳机", "amount": 299.0, "risk_level": "LOW", "logistics": null},
+    {"order_no": "10002", "user_id": "demo-user", "status": "SHIPPED", "shipping_status": "IN_TRANSIT", "product_name": "机械键盘", "amount": 499.0, "risk_level": "LOW", "logistics": {"tracking_number": "SF123456", "carrier": "顺丰", "status": "IN_TRANSIT", "current_location": "上海转运中心", "estimated_delivery": "2026-09-21"}},
+    {"order_no": "10003", "user_id": "demo-user", "status": "COMPLETED", "shipping_status": "DELIVERED", "product_name": "显示器", "amount": 1299.0, "risk_level": "MEDIUM", "logistics": {"tracking_number": "YT888888", "carrier": "圆通", "status": "DELIVERED", "current_location": "已签收", "estimated_delivery": "2026-09-18"}},
+    {"order_no": "10004", "user_id": "demo-user", "status": "REFUNDED", "shipping_status": "NOT_SHIPPED", "product_name": "智能手表", "amount": 899.0, "risk_level": "LOW", "logistics": null},
+    {"order_no": "10005", "user_id": "demo-user", "status": "SHIPPED", "shipping_status": "EXCEPTION", "product_name": "笔记本电脑", "amount": 6999.0, "risk_level": "HIGH", "logistics": {"tracking_number": "JD100005", "carrier": "京东物流", "status": "EXCEPTION", "current_location": "运输异常，等待人工核查", "estimated_delivery": null}}
+  ]
+}

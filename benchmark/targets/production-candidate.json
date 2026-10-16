@@ -1,0 +1,17 @@
+{
+  "status": "candidate_not_validated",
+  "minimum_dataset_sizes": {
+    "agent_end_to_end": 200,
+    "rag_positive": 100,
+    "safety_safe": 100,
+    "safety_unsafe": 100
+  },
+  "targets": {
+    "agent_task_success_rate": 0.9,
+    "rag_recall_at_3": 0.85,
+    "rag_mrr_at_10": 0.8,
+    "safety_false_block_rate_max": 0.03,
+    "safety_false_allow_rate_max": 0.01
+  },
+  "note": "Initial candidate targets only; validate on representative anonymized production data."
+}

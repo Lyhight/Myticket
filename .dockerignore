@@ -1,0 +1,14 @@
+.git
+.github
+backend/.venv
+backend/.env
+backend/.pytest_cache
+backend/tests
+backend/evals
+backend/**/__pycache__
+backend/*.egg-info
+frontend/node_modules
+frontend/dist
+benchmark/reports
+*.pyc
+*.log

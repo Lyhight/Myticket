@@ -1,0 +1,6 @@
+{
+  "name": "keyword-baseline",
+  "retriever": "keyword",
+  "top_k": 10,
+  "description": "无外部模型依赖的关键词检索基线"
+}

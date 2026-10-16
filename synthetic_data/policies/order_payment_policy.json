@@ -1,0 +1,7 @@
+{
+  "id": "policy-order-payment-v1",
+  "title": "订单与支付说明",
+  "source": "builtin://order-payment-policy",
+  "version": 1,
+  "content": "订单支付成功后进入待处理状态。具体订单的实时支付状态、处理状态和金额必须通过订单查询工具确认，客服不能仅根据知识库进行推测。发现重复扣款、盗刷或金额异常时应立即转人工核查，不得直接承诺退款结果。"
+}

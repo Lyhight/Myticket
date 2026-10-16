@@ -1,0 +1,7 @@
+{
+  "id": "policy-logistics-v1",
+  "title": "物流查询政策",
+  "source": "builtin://logistics-policy",
+  "version": 1,
+  "content": "物流查询需要订单号或物流单号。承运商、当前位置、签收状态和预计送达时间必须来自物流工具结果，不得推测。超过三天无轨迹或状态异常时应升级人工处理。"
+}

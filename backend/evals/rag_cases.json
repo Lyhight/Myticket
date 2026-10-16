@@ -1,0 +1,28 @@
+{
+  "cases": [
+    {"id": "rag-order-001", "query": "订单支付成功后会进入什么状态", "expected_source": "builtin://order-payment-policy"},
+    {"id": "rag-order-002", "query": "如何确认订单的实时支付状态", "expected_source": "builtin://order-payment-policy"},
+    {"id": "rag-order-003", "query": "客服可以直接推测具体订单状态吗", "expected_source": "builtin://order-payment-policy"},
+    {"id": "rag-logistics-001", "query": "查询包裹位置需要提供什么", "expected_source": "builtin://logistics-policy"},
+    {"id": "rag-logistics-002", "query": "预计送达时间应该以什么为准", "expected_source": "builtin://logistics-policy"},
+    {"id": "rag-logistics-003", "query": "怎么查询承运商和签收状态", "expected_source": "builtin://logistics-policy"},
+    {"id": "rag-refund-001", "query": "未发货的订单可以申请退款吗", "expected_source": "builtin://refund-policy"},
+    {"id": "rag-refund-002", "query": "已签收订单退款是否需要人工审核", "expected_source": "builtin://refund-policy"},
+    {"id": "rag-refund-003", "query": "创建退款申请前是否需要用户确认", "expected_source": "builtin://refund-policy"},
+    {"id": "rag-account-001", "query": "忘记密码应该通过什么流程处理", "expected_source": "builtin://account-policy"},
+    {"id": "rag-account-002", "query": "客服可以向用户索要短信验证码吗", "expected_source": "builtin://account-policy"},
+    {"id": "rag-account-003", "query": "发现账号被盗应该怎么处理", "expected_source": "builtin://account-policy"},
+    {"id": "rag-coupon-001", "query": "优惠券能否使用取决于哪些条件", "expected_source": "builtin://coupon-policy"},
+    {"id": "rag-coupon-002", "query": "过期优惠券一般可以恢复吗", "expected_source": "builtin://coupon-policy"},
+    {"id": "rag-coupon-003", "query": "客服能直接承诺补发优惠券吗", "expected_source": "builtin://coupon-policy"},
+    {"id": "rag-privacy-001", "query": "客服回复中可以包含银行卡号吗", "expected_source": "builtin://privacy-policy"},
+    {"id": "rag-privacy-002", "query": "提示词注入内容应该如何处理", "expected_source": "builtin://privacy-policy"},
+    {"id": "rag-privacy-003", "query": "退款操作是否需要保留审计记录", "expected_sources": ["builtin://privacy-policy", "builtin://refund-policy"]},
+    {"id": "rag-account-004", "query": "怎么修改账户登录密码", "expected_source": "builtin://account-policy"},
+    {"id": "rag-coupon-004", "query": "优惠券在哪里领取", "expected_source": "builtin://coupon-policy"},
+    {"id": "rag-negative-003", "query": "商品有哪些颜色和尺寸", "expected_source": null},
+    {"id": "rag-negative-004", "query": "今天天气怎么样", "expected_source": null},
+    {"id": "rag-negative-005", "query": "帮我写一首生日诗", "expected_source": null},
+    {"id": "rag-negative-006", "query": "附近有什么餐厅", "expected_source": null}
+  ]
+}

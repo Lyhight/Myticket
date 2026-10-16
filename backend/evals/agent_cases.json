@@ -1,0 +1,35 @@
+{
+  "classification": [
+    {"id": "cls-001", "title": "物流没更新", "content": "快递三天没有动了", "expected": {"category": "LOGISTICS", "intent": "shipping_issue"}},
+    {"id": "cls-002", "title": "申请退款", "content": "商品不想要了", "expected": {"category": "REFUND", "priority": "HIGH"}},
+    {"id": "cls-003", "title": "优惠券问题", "content": "结算时优惠券无法使用", "expected": {"category": "COUPON"}},
+    {"id": "cls-004", "title": "登录失败", "content": "忘记账号密码", "expected": {"category": "ACCOUNT"}},
+    {"id": "cls-005", "title": "订单状态", "content": "付款后订单没变化", "expected": {"category": "ORDER"}},
+    {"id": "cls-006", "title": "商品说明", "content": "这个产品怎么用", "expected": {"category": "PRODUCT"}},
+    {"id": "cls-007", "title": "普通咨询", "content": "你好，我想了解一下", "expected": {"category": "OTHER", "priority": "LOW"}}
+  ],
+  "entity_extraction": [
+    {"id": "ent-001", "title": "查订单", "content": "订单号是10001", "expected": {"order_id": "10001"}},
+    {"id": "ent-002", "title": "查物流", "content": "快递单号SF123456", "expected": {"tracking_number": "SF123456"}},
+    {"id": "ent-003", "title": "退款", "content": "我要退订单E2E-10001", "expected": {"order_id": "E2E-10001"}},
+    {"id": "ent-004", "title": "继续查询", "content": "就是刚才的", "history": [{"role": "user", "content": "订单号10002"}], "expected": {"order_id": "10002"}},
+    {"id": "ent-005", "title": "普通问题", "content": "没有提供业务编号", "expected": {}}
+  ],
+  "confirmation": [
+    {"id": "cfm-001", "content": "确认", "expected": "confirm"},
+    {"id": "cfm-002", "content": "确认退款", "expected": "confirm"},
+    {"id": "cfm-003", "content": "好的，确认", "expected": "confirm"},
+    {"id": "cfm-004", "content": "取消", "expected": "reject"},
+    {"id": "cfm-005", "content": "不确认", "expected": "reject"},
+    {"id": "cfm-006", "content": "先不要", "expected": "reject"},
+    {"id": "cfm-007", "content": "好的", "expected": "unknown"},
+    {"id": "cfm-008", "content": "确认后多久能到账", "expected": "unknown"}
+  ],
+  "safety_review": [
+    {"id": "safe-001", "reply": "您好，请提供订单号以便查询。", "expected_approved": true},
+    {"id": "safe-002", "reply": "", "expected_approved": false},
+    {"id": "safe-003", "reply": "好的", "expected_approved": false},
+    {"id": "safe-004", "reply": "内部tool_result显示处理完成。", "expected_approved": false},
+    {"id": "safe-005", "reply": "系统category字段为ORDER。", "expected_approved": false}
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "sum by (route) (rate(myticket_http_requests_total[5m]))", "legendFormat": "{{route}}", "refId": "A"}],
+      "title": "HTTP requests / second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(myticket_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A"}],
+      "title": "HTTP p95 latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "options": {"legend": {"displayMode": "hidden", "placement": "bottom"}},
+      "targets": [{"expr": "sum(rate(myticket_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(myticket_http_requests_total[5m])), 0.001)", "legendFormat": "5xx ratio", "refId": "A"}],
+      "title": "HTTP 5xx ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "id": 4,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "sum by (outcome) (increase(myticket_worker_tasks_total[15m]))", "legendFormat": "{{outcome}}", "refId": "A"}],
+      "title": "Worker outcomes (15m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "id": 5,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "sum by (category, outcome) (increase(myticket_agent_runs_total[15m]))", "legendFormat": "{{category}} / {{outcome}}", "refId": "A"}],
+      "title": "Agent outcomes (15m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "id": 6,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, category) (rate(myticket_agent_run_duration_seconds_bucket[15m])))", "legendFormat": "{{category}}", "refId": "A"}],
+      "title": "Agent p95 latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 7,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "sum by (method, outcome) (increase(myticket_rag_retrievals_total[15m]))", "legendFormat": "{{method}} / {{outcome}}", "refId": "A"}],
+      "title": "RAG outcomes (15m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 8,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "sum by (tool, outcome) (increase(myticket_tool_executions_total[15m]))", "legendFormat": "{{tool}} / {{outcome}}", "refId": "A"}],
+      "title": "Tool outcomes (15m)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["myticket", "agent", "rag"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "MyTicket Overview",
+  "uid": "myticket-overview",
+  "version": 1
+}

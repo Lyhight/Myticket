@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: sqlite+aiosqlite://
+      JWT_SECRET: ci-only-secret-with-at-least-32-characters
+      DASHSCOPE_API_KEY: ci-placeholder
+      EMBEDDING_ENABLED: "false"
+      DEBUG: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - run: python run_benchmark.py --skip-rag --output ../benchmark/reports/ci
+      - run: python run_quality_gate.py --skip-rag
+      - run: python validate_project_config.py
+      - run: alembic heads
+
+  mysql-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: myticket
+          MYSQL_ROOT_PASSWORD: ci-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: mysql+asyncmy://root:ci-root-password@127.0.0.1:3306/myticket
+      REDIS_URL: redis://127.0.0.1:6379/15
+      RATE_LIMIT_BACKEND: redis
+      RATE_LIMIT_REDIS_FAILURE_MODE: deny
+      JWT_SECRET: ci-only-secret-with-at-least-32-characters
+      LLM_ENABLED: "false"
+      EMBEDDING_ENABLED: "false"
+      DEBUG: "false"
+      DEMO_USER_PASSWORD: ci-demo-password
+      DEMO_ADMIN_PASSWORD: ci-admin-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: alembic upgrade head
+      - run: alembic current
+      - run: python seed_demo_data.py
+      - run: python seed_knowledge_base.py
+      - run: python verify_redis_rate_limit.py
+      - run: python verify_mysql_task_leases.py
+      - run: python run_benchmark.py --output ../benchmark/reports/mysql
+      - run: python run_quality_gate.py --output ../benchmark/reports/mysql/quality-gate.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-benchmark-report
+          path: benchmark/reports/mysql
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  operations-config:
+    runs-on: ubuntu-latest
+    env:
+      MYSQL_PASSWORD: ci-compose-password
+      MYSQL_ROOT_PASSWORD: ci-compose-root-password
+      JWT_SECRET: ci-only-secret-with-at-least-32-characters
+      GRAFANA_ADMIN_PASSWORD: ci-grafana-password
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --profile monitoring config --quiet
+      - name: Validate Prometheus configuration and alert rules
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/monitoring/prometheus:/etc/prometheus:ro" \
+            prom/prometheus:v3.5.0 \
+            check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/monitoring/prometheus:/etc/prometheus:ro" \
+            prom/prometheus:v3.5.0 \
+            check rules /etc/prometheus/alerts.yml
+      - run: python -m json.tool monitoring/grafana/dashboards/myticket-overview.json > /dev/null

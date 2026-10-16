@@ -1,0 +1,11 @@
+{
+  "generated": true,
+  "tickets": [
+    {"ticket_id": "T-001", "scenario": "order_query", "title": "订单状态", "message": "我的订单 10002 到哪里了？", "expected_route": "order_support"},
+    {"ticket_id": "T-002", "scenario": "logistics_query", "title": "物流查询", "message": "快递单号 SF123456 什么时候到？", "expected_route": "logistics_support"},
+    {"ticket_id": "T-003", "scenario": "refund_confirmation", "title": "申请退款", "message": "订单 10001 不想要了，帮我退款。", "expected_route": "after_sales"},
+    {"ticket_id": "T-004", "scenario": "duplicate_refund", "title": "重复退款", "message": "订单 10004 再退一次。", "expected_route": "after_sales"},
+    {"ticket_id": "T-005", "scenario": "human_escalation", "title": "物流异常", "message": "订单 10005 一直没有更新。", "expected_route": "logistics_support"},
+    {"ticket_id": "T-006", "scenario": "missing_entity", "title": "查物流", "message": "帮我看看包裹到哪了。", "expected_route": "logistics_support"}
+  ]
+}

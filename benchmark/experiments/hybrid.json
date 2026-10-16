@@ -1,0 +1,6 @@
+{
+  "name": "hybrid-embedding",
+  "retriever": "hybrid",
+  "top_k": 10,
+  "description": "关键词与向量相似度融合实验"
+}

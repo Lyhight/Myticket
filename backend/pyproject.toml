@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myticket-backend"
+version = "0.1.0"
+description = "Traceable and evaluable AI customer-service agent"
+requires-python = ">=3.11"
+license = "MIT"
+
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.53.0",
+    "pydantic-settings==2.15.0",
+    "sqlalchemy==2.0.54",
+    "asyncmy==0.2.14",
+    "alembic==1.20.0",
+    "email-validator==2.3.0",
+    "PyJWT==2.14.0",
+    "pwdlib[argon2]==0.3.1",
+    "redis==7.3.0",
+    "prometheus-client==0.22.1",
+    "openai==3.14.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "httpx==0.28.1",
+    "aiosqlite==0.22.1",
+    "PyYAML==6.0.3",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
