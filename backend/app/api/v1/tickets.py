@@ -8,13 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
     get_current_user,
-    require_admin,
+    require_support_agent,
+    require_supervisor,
 )
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.ticket import (
     TicketCreate,
     TicketDetailResponse,
+    HandoffQueueResponse,
     TicketRejectRequest,
     TicketResponse,
 )
@@ -87,12 +89,54 @@ async def list_tickets(
     response_model=list[TicketResponse],
 )
 async def list_pending_tickets(
-    admin: User = Depends(require_admin),
+    supervisor: User = Depends(require_supervisor),
     db: AsyncSession = Depends(get_db),
 ):
     service = TicketService(db)
 
     return await service.list_pending_tickets()
+
+
+@router.get("/handoff", response_model=HandoffQueueResponse)
+async def list_handoff_tickets(
+    agent: User = Depends(require_support_agent),
+    db: AsyncSession = Depends(get_db),
+):
+    service = TicketService(db)
+    return {
+        "waiting": await service.list_handoff_queue(),
+        "assigned": await service.list_assigned_tickets(agent),
+    }
+
+
+@router.post("/{ticket_id}/claim", response_model=TicketResponse)
+async def claim_handoff_ticket(
+    ticket_id: int,
+    agent: User = Depends(require_support_agent),
+    db: AsyncSession = Depends(get_db),
+):
+    return await TicketService(db).claim_handoff(agent, ticket_id)
+
+
+@router.post("/{ticket_id}/human-messages", response_model=MessageResponse)
+async def send_human_support_message(
+    ticket_id: int,
+    data: MessageCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await TicketService(db).send_human_message(
+        current_user, ticket_id, data.content
+    )
+
+
+@router.post("/{ticket_id}/resolve", response_model=TicketResponse)
+async def resolve_handoff_ticket(
+    ticket_id: int,
+    agent: User = Depends(require_support_agent),
+    db: AsyncSession = Depends(get_db),
+):
+    return await TicketService(db).resolve_handoff(agent, ticket_id)
 
 
 @router.get(
@@ -305,7 +349,7 @@ async def get_agent_task(
 )
 async def approve_ticket(
     ticket_id: int,
-    admin: User = Depends(require_admin),
+    supervisor: User = Depends(require_supervisor),
     db: AsyncSession = Depends(get_db),
 ):
     service = TicketService(db)
@@ -320,7 +364,7 @@ async def approve_ticket(
 async def reject_ticket(
     ticket_id: int,
     data: TicketRejectRequest,
-    admin: User = Depends(require_admin),
+    supervisor: User = Depends(require_supervisor),
     db: AsyncSession = Depends(get_db),
 ):
     service = TicketService(db)

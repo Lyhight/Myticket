@@ -97,7 +97,7 @@ def validate_project_config(project_root: Path) -> list[str]:
 
     services = compose.get("services", {}) if isinstance(compose, dict) else {}
     required_services = {
-        "mysql", "redis", "backend", "worker", "frontend", "prometheus", "grafana"
+        "mysql", "redis", "qdrant", "backend", "worker", "frontend", "prometheus", "grafana"
     }
     missing_services = required_services - set(services)
     if missing_services:

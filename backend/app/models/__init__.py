@@ -8,6 +8,8 @@ from app.models.refund import RefundRequest
 from app.models.user_memory import UserMemory
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.agent_task import AgentTask
+from app.models.domain_event import DomainEvent
+from app.models.feedback import KnowledgeGap, MessageFeedback
 __all__ = [
     "User",
     "Ticket",
@@ -20,4 +22,7 @@ __all__ = [
     "KnowledgeDocument",
     "KnowledgeChunk",
     "AgentTask",
+    "DomainEvent",
+    "MessageFeedback",
+    "KnowledgeGap",
 ]

@@ -22,7 +22,7 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.ticket_repository import TicketRepository
 from app.repositories.user_memory_repository import UserMemoryRepository
 from app.agent.memory.long_term import LongTermMemoryService
-from app.agent.rag import HybridKnowledgeRetriever
+from app.kb.retrieval import HybridKnowledgeRetriever
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.agent_task_repository import AgentTaskRepository
 from app.repositories.user_repository import UserRepository
@@ -30,6 +30,8 @@ from app.schemas.ticket import TicketCreate
 from app.agent.trace import build_memory_trace, build_rag_trace
 from app.agent.guardrails import InputGuard
 from app.core.config import settings
+from app.graph.runtime import LangGraphCustomerServiceRuntime
+from app.services.feedback_service import FeedbackService
 
 
 # 单进程内，同一个工单只允许一条消息进入 Agent；不同工单仍可并行。
@@ -70,12 +72,27 @@ def _should_escalate(result: CustomerServiceAgentResult) -> bool:
     return False
 
 
+def _escalation_status(
+    result: CustomerServiceAgentResult,
+    state: AgentState,
+) -> str | None:
+    if not _should_escalate(result):
+        return None
+    if (
+        state.pending_action is not None
+        or (result.review is not None and not result.review.approved)
+    ):
+        return "PENDING_REVIEW"
+    return "WAITING_HUMAN"
+
+
 class TicketService:
 
     def __init__(
         self,
         db: AsyncSession,
     ):
+        self.db = db
         self.repo = TicketRepository(db)
 
         self.message_repo = MessageRepository(db)
@@ -92,6 +109,21 @@ class TicketService:
         )
 
         self.agent = CustomerServiceAgent()
+        self.runtime = LangGraphCustomerServiceRuntime(self.agent)
+
+    @staticmethod
+    def _can_access_ticket(current_user: User, ticket) -> bool:
+        if ticket.user_id == current_user.id:
+            return True
+        if current_user.role in {"supervisor", "admin"}:
+            return True
+        return (
+            current_user.role == "agent"
+            and (
+                ticket.assigned_agent_id == current_user.id
+                or ticket.status == "WAITING_HUMAN"
+            )
+        )
 
     async def create_ticket(
         self,
@@ -148,7 +180,7 @@ class TicketService:
             )
         )
         rag_latency_ms = (perf_counter() - rag_started) * 1000
-        agent_execution = await self.agent.run_with_state(
+        agent_execution = await self.runtime.run_with_state(
             title=data.title,
             content=data.content,
             history=[],
@@ -206,9 +238,11 @@ class TicketService:
         # 等人工 approve 后再生成正式消息。
         # ---------------------------------
 
-        escalate = _should_escalate(agent_result)
+        escalation_status = _escalation_status(
+            agent_result, agent_execution.state
+        )
 
-        if not escalate:
+        if escalation_status is None:
             await self.message_repo.create(
                 ticket_id=ticket.id,
                 sender_type="AI",
@@ -220,7 +254,7 @@ class TicketService:
         # 保存 Agent 执行轨迹
         # ---------------------------------
 
-        await self.agent_run_repo.create(
+        agent_run = await self.agent_run_repo.create(
             ticket_id=ticket.id,
             result=agent_result,
             state=agent_execution.state,
@@ -237,6 +271,14 @@ class TicketService:
             context_trace=dict(agent_execution.state.context_metadata),
             total_latency_ms=(perf_counter() - workflow_started) * 1000,
         )
+        await FeedbackService(self.db).capture_agent_failure(
+            ticket_id=ticket.id,
+            run=agent_run,
+            question=data.content,
+            result=agent_result,
+            state=agent_execution.state,
+            retrieved_knowledge=retrieved_knowledge,
+        )
         await self.long_term_memory.remember_from_message(
             user_id=current_user.id,
             ticket_id=ticket.id,
@@ -248,10 +290,28 @@ class TicketService:
         # 需要转人工 -> 标记待审批
         # ---------------------------------
 
-        if escalate:
+        if escalation_status is not None:
             ticket = await self.repo.set_status(
                 ticket,
-                "PENDING_REVIEW",
+                escalation_status,
+                event_type=(
+                    "approval.requested"
+                    if escalation_status == "PENDING_REVIEW"
+                    else "ticket.escalated"
+                ),
+                event_payload={
+                    "ticket_id": ticket.id,
+                    "title": ticket.title,
+                    "priority": ticket.priority,
+                    "reason": agent_result.action.reason,
+                    "status": escalation_status,
+                },
+                audience_role=(
+                    "supervisor"
+                    if escalation_status == "PENDING_REVIEW"
+                    else "agent"
+                ),
+                escalation_reason=agent_result.action.reason,
             )
 
         # ---------------------------------
@@ -292,10 +352,7 @@ class TicketService:
                 detail="Ticket not found",
             )
 
-        if (
-            ticket.user_id != current_user.id
-            and current_user.role != "admin"
-        ):
+        if not self._can_access_ticket(current_user, ticket):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
@@ -364,10 +421,7 @@ class TicketService:
         # 权限检查
         # ---------------------------------
 
-        if (
-            ticket.user_id != current_user.id
-            and current_user.role != "admin"
-        ):
+        if not self._can_access_ticket(current_user, ticket):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
@@ -393,10 +447,12 @@ class TicketService:
         idempotency_key: str | None = None,
     ):
         ticket = await self.get_ticket(current_user, ticket_id)
-        if ticket.status == "PENDING_REVIEW":
+        if ticket.status in {
+            "PENDING_REVIEW", "WAITING_HUMAN", "HUMAN_PROCESSING"
+        }:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Ticket is pending human review",
+                detail="Ticket is handled outside the Agent message flow",
             )
         task_key = (
             f"user:{current_user.id}:"
@@ -488,10 +544,12 @@ class TicketService:
         idempotency_key: str | None = None,
     ):
         ticket = await self.get_ticket(current_user, ticket_id)
-        if ticket.status == "PENDING_REVIEW":
+        if ticket.status in {
+            "PENDING_REVIEW", "WAITING_HUMAN", "HUMAN_PROCESSING"
+        }:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Ticket is pending human review",
+                detail="Ticket is handled outside the Agent message flow",
             )
         key = f"user:{current_user.id}:{idempotency_key or uuid4().hex}"
         task = await self.task_repo.create_or_get(
@@ -778,14 +836,14 @@ class TicketService:
             == "waiting_for_confirmation"
             and previous_state.category == "REFUND"
         ):
-            agent_execution = await self.agent.resume_from_state(
+            agent_execution = await self.runtime.resume_from_state(
                 previous_state=previous_state,
                 content=content,
                 user_id=current_user.id,
                 ticket_id=ticket.id,
             )
         else:
-            agent_execution = await self.agent.run_with_state(
+            agent_execution = await self.runtime.run_with_state(
                 title=ticket.title,
                 content=content,
                 history=history,
@@ -805,11 +863,13 @@ class TicketService:
         # 草稿保留在 AgentRun.final_reply 中。
         # ---------------------------------
 
-        escalate = _should_escalate(agent_result)
+        escalation_status = _escalation_status(
+            agent_result, agent_execution.state
+        )
 
         ai_message = None
 
-        if not escalate:
+        if escalation_status is None:
             ai_message = await self.message_repo.create(
                 ticket_id=ticket_id,
                 sender_type="AI",
@@ -825,7 +885,7 @@ class TicketService:
         # 保存本轮 Agent Trace
         # ---------------------------------
 
-        await self.agent_run_repo.create(
+        agent_run = await self.agent_run_repo.create(
             ticket_id=ticket_id,
             result=agent_result,
             state=agent_execution.state,
@@ -842,6 +902,14 @@ class TicketService:
             context_trace=dict(agent_execution.state.context_metadata),
             total_latency_ms=(perf_counter() - workflow_started) * 1000,
         )
+        await FeedbackService(self.db).capture_agent_failure(
+            ticket_id=ticket_id,
+            run=agent_run,
+            question=content,
+            result=agent_result,
+            state=agent_execution.state,
+            retrieved_knowledge=retrieved_knowledge,
+        )
         await self.long_term_memory.remember_from_message(
             user_id=current_user.id,
             ticket_id=ticket_id,
@@ -853,10 +921,28 @@ class TicketService:
         # 需要转人工 -> 标记待审批
         # ---------------------------------
 
-        if escalate:
+        if escalation_status is not None:
             await self.repo.set_status(
                 ticket,
-                "PENDING_REVIEW",
+                escalation_status,
+                event_type=(
+                    "approval.requested"
+                    if escalation_status == "PENDING_REVIEW"
+                    else "ticket.escalated"
+                ),
+                event_payload={
+                    "ticket_id": ticket.id,
+                    "title": ticket.title,
+                    "priority": ticket.priority,
+                    "reason": agent_result.action.reason,
+                    "status": escalation_status,
+                },
+                audience_role=(
+                    "supervisor"
+                    if escalation_status == "PENDING_REVIEW"
+                    else "agent"
+                ),
+                escalation_reason=agent_result.action.reason,
             )
 
         # ---------------------------------
@@ -876,6 +962,79 @@ class TicketService:
         """
 
         return await self.repo.list_pending()
+
+    async def list_handoff_queue(self):
+        return await self.repo.list_handoff_queue()
+
+    async def list_assigned_tickets(self, agent: User):
+        return await self.repo.list_assigned(agent.id)
+
+    async def claim_handoff(self, agent: User, ticket_id: int):
+        ticket = await self.repo.claim_for_agent(ticket_id, agent.id)
+        if ticket is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ticket was already claimed or is not waiting",
+            )
+        return ticket
+
+    async def send_human_message(
+        self,
+        current_user: User,
+        ticket_id: int,
+        content: str,
+    ):
+        ticket = await self.repo.get_by_id(ticket_id)
+        if ticket is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ticket not found",
+            )
+        is_customer = ticket.user_id == current_user.id
+        is_assigned = ticket.assigned_agent_id == current_user.id
+        is_supervisor = current_user.role in {"supervisor", "admin"}
+        if not (is_customer or is_assigned or is_supervisor):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not allowed to send a human-support message",
+            )
+        if ticket.status not in {"WAITING_HUMAN", "HUMAN_PROCESSING"}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ticket is not in human support",
+            )
+        sender_type = "CUSTOMER" if is_customer else "HUMAN_AGENT"
+        return await self.message_repo.create(
+            ticket_id=ticket_id,
+            sender_type=sender_type,
+            content=content,
+            event_type="message.created",
+            audience_role=(
+                "agent"
+                if is_customer and ticket.assigned_agent_id is None
+                else None
+            ),
+            audience_user_id=(ticket.user_id if not is_customer else ticket.assigned_agent_id),
+        )
+
+    async def resolve_handoff(self, agent: User, ticket_id: int):
+        ticket = await self.repo.get_by_id(ticket_id)
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        if (
+            ticket.assigned_agent_id != agent.id
+            and agent.role not in {"supervisor", "admin"}
+        ):
+            raise HTTPException(status_code=403, detail="Ticket is assigned to another agent")
+        if ticket.status != "HUMAN_PROCESSING":
+            raise HTTPException(status_code=409, detail="Ticket is not being handled")
+        return await self.repo.set_status(
+            ticket,
+            "RESOLVED",
+            event_type="ticket.resolved",
+            event_payload={"ticket_id": ticket.id, "agent_id": agent.id},
+            audience_user_id=ticket.user_id,
+        )
 
     async def approve_ticket(
         self,
@@ -1052,11 +1211,16 @@ class TicketService:
             ticket_id=ticket_id,
             sender_type="AI",
             content=reply_content,
+            event_type="message.created",
+            audience_user_id=ticket.user_id,
         )
 
         return await self.repo.set_status(
             ticket,
             "RESOLVED",
+            event_type="ticket.resolved",
+            event_payload={"ticket_id": ticket.id, "source": "approval"},
+            audience_user_id=ticket.user_id,
         )
 
     async def reject_ticket(
@@ -1110,11 +1274,22 @@ class TicketService:
         if content:
             await self.message_repo.create(
                 ticket_id=ticket_id,
-                sender_type="AGENT",
+                sender_type="HUMAN_AGENT",
                 content=content,
+                event_type="message.created",
+                audience_user_id=ticket.user_id,
             )
 
         return await self.repo.set_status(
             ticket,
-            "RESOLVED",
+            "WAITING_HUMAN",
+            event_type="ticket.escalated",
+            event_payload={
+                "ticket_id": ticket.id,
+                "reason": "Supervisor rejected the Agent proposal",
+                "status": "WAITING_HUMAN",
+            },
+            audience_role="agent",
+            audience_user_id=ticket.user_id,
+            escalation_reason="Supervisor rejected the Agent proposal",
         )

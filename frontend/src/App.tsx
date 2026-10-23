@@ -6,6 +6,8 @@ import TicketsPage from './pages/TicketsPage'
 import TicketPage from './pages/TicketPage'
 import ReviewPage from './pages/ReviewPage'
 import KnowledgePage from './pages/KnowledgePage'
+import SupportPage from './pages/SupportPage'
+import FeedbackPage from './pages/FeedbackPage'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -16,7 +18,9 @@ export default function App() {
       <Routes>
         <Route path="/tickets" element={<TicketsPage />} />
         <Route path="/tickets/:id" element={<TicketPage />} />
-        <Route path="/review" element={user.role === 'admin' ? <ReviewPage /> : <Navigate to="/tickets" />} />
+        <Route path="/support" element={['agent', 'supervisor', 'admin'].includes(user.role) ? <SupportPage /> : <Navigate to="/tickets" />} />
+        <Route path="/review" element={['supervisor', 'admin'].includes(user.role) ? <ReviewPage /> : <Navigate to="/tickets" />} />
+        <Route path="/feedback" element={['supervisor', 'admin'].includes(user.role) ? <FeedbackPage /> : <Navigate to="/tickets" />} />
         <Route path="/knowledge" element={user.role === 'admin' ? <KnowledgePage /> : <Navigate to="/tickets" />} />
         <Route path="*" element={<Navigate to="/tickets" replace />} />
       </Routes>

@@ -5,8 +5,8 @@ import { useAuth } from '../state/AuthContext'
 export default function LoginPage() {
   const { login, register } = useAuth()
   const [mode, setMode] = useState<'login'|'register'>('login')
-  const [email, setEmail] = useState('demo@example.com')
-  const [password, setPassword] = useState('DemoPass123!')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   async function submit(e: FormEvent) {

@@ -1,10 +1,8 @@
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.rag import (
-    HybridKnowledgeRetriever,
-    KnowledgeBaseService,
-)
+from app.kb.retrieval import HybridKnowledgeRetriever
+from app.kb.service import KnowledgeBaseService
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.schemas.knowledge import (
     KnowledgeDocumentCreate,
@@ -49,7 +47,9 @@ class KnowledgeAdminService:
 
     async def deactivate_document(self, document_id: int):
         document = await self._require_document(document_id)
-        return await self.repository.deactivate_document(document)
+        document = await self.repository.deactivate_document(document)
+        await self.knowledge_base.deactivate(document)
+        return document
 
     async def search(self, query: str, top_k: int):
         return await self.retriever.retrieve(query, top_k=top_k)

@@ -1,13 +1,16 @@
-import { ArrowLeft, Bot, BrainCircuit, Database, RefreshCw, Send, UserRound, Wrench } from 'lucide-react'
+import { ArrowLeft, Bot, BrainCircuit, Database, RefreshCw, Send, ThumbsDown, ThumbsUp, UserRound, Wrench } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, streamApi } from '../api/client'
-import type { AgentRun, Message, Ticket } from '../types'
+import type { AgentRun, FeedbackRating, Message, MessageFeedback, Ticket } from '../types'
 import Badge from '../components/Badge'
+import { useAuth } from '../state/AuthContext'
+import type { DomainEvent } from '../types'
 
 export default function TicketPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [ticket, setTicket] = useState<Ticket | null>(null)
   const [runs, setRuns] = useState<AgentRun[]>([])
   const [message, setMessage] = useState('')
@@ -16,18 +19,32 @@ export default function TicketPage() {
   const [agentStage, setAgentStage] = useState('正在理解问题并查询相关信息')
   const [streamedReply, setStreamedReply] = useState('')
   const [tab, setTab] = useState<'trace' | 'state'>('trace')
+  const [feedback, setFeedback] = useState<Record<number, FeedbackRating>>({})
   const messagesRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
-    const [nextTicket, nextRuns] = await Promise.all([
+    const feedbackRequest = user?.role === 'customer'
+      ? api<MessageFeedback[]>(`/feedback?ticket_id=${id}`)
+      : Promise.resolve([])
+    const [nextTicket, nextRuns, nextFeedback] = await Promise.all([
       api<Ticket>(`/tickets/${id}`),
       api<AgentRun[]>(`/tickets/${id}/agent-runs`),
+      feedbackRequest,
     ])
     setTicket(nextTicket)
     setRuns(nextRuns)
-  }, [id])
+    setFeedback(Object.fromEntries(nextFeedback.map(item => [item.message_id, item.rating])))
+  }, [id, user?.role])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const listener = (raw: Event) => {
+      const event = (raw as CustomEvent<DomainEvent>).detail
+      if (event.aggregate_id === Number(id)) load().catch(() => undefined)
+    }
+    window.addEventListener('myticket:event', listener)
+    return () => window.removeEventListener('myticket:event', listener)
+  }, [id, load])
   useEffect(() => {
     const container = messagesRef.current
     if (!container) return
@@ -39,6 +56,8 @@ export default function TicketPage() {
 
   const latest = runs.at(-1)
   const awaitingReview = ticket?.status === 'PENDING_REVIEW'
+  const humanMode = ticket?.status === 'WAITING_HUMAN' || ticket?.status === 'HUMAN_PROCESSING'
+  const supportRole = !!user && ['agent', 'supervisor', 'admin'].includes(user.role)
 
   async function send(event: FormEvent) {
     event.preventDefault()
@@ -64,6 +83,14 @@ export default function TicketPage() {
     } : current)
 
     try {
+      if (humanMode) {
+        await api(`/tickets/${id}/human-messages`, {
+          method: 'POST',
+          body: JSON.stringify({ content }),
+        })
+        await load()
+        return
+      }
       for await (const event of streamApi(
         `/tickets/${id}/messages/stream`,
         { content },
@@ -85,12 +112,32 @@ export default function TicketPage() {
     }
   }
 
+  async function rateMessage(item: Message, rating: FeedbackRating) {
+    const previous = feedback[item.id]
+    setFeedback(current => ({ ...current, [item.id]: rating }))
+    try {
+      const result = await api<MessageFeedback>('/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ ticket_id: ticket!.id, message_id: item.id, rating }),
+      })
+      setFeedback(current => ({ ...current, [item.id]: result.rating }))
+    } catch (error) {
+      setFeedback(current => {
+        const next = { ...current }
+        if (previous) next[item.id] = previous
+        else delete next[item.id]
+        return next
+      })
+      setSendError(error instanceof Error ? error.message : '评价提交失败')
+    }
+  }
+
   if (!ticket) return <div className="boot"><div className="loader"/></div>
 
   return <div className="workspace">
     <section className="conversation">
       <header className="conversation-head">
-        <button className="icon-button" onClick={() => navigate('/tickets')}><ArrowLeft/></button>
+        <button className="icon-button" onClick={() => navigate(supportRole ? '/support' : '/tickets')}><ArrowLeft/></button>
         <div>
           <div className="ticket-title">
             <h2>{ticket.title}</h2>
@@ -99,11 +146,12 @@ export default function TicketPage() {
           </div>
           <span>工单 #{ticket.id} · {ticket.route_to}</span>
         </div>
+        {supportRole && ticket.status === 'HUMAN_PROCESSING' && <button className="secondary" onClick={async () => { await api(`/tickets/${id}/resolve`, { method: 'POST' }); await load() }}>解决工单</button>}
         <button className="icon-button" onClick={load} disabled={busy}><RefreshCw size={18}/></button>
       </header>
 
       <div className="messages" ref={messagesRef}>
-        {ticket.messages?.map(item => <ChatMessage key={item.id} item={item}/>)}
+        {ticket.messages?.map(item => <ChatMessage key={item.id} item={item} canRate={user?.role === 'customer'} rating={feedback[item.id]} onRate={rateMessage}/>)}
         {busy && <div className="message agent thinking-message">
           <div className="message-avatar"><Bot/></div>
           <div>
@@ -122,7 +170,7 @@ export default function TicketPage() {
         <textarea
           value={message}
           onChange={event => setMessage(event.target.value)}
-          placeholder={awaitingReview ? '该工单正在等待人工审批' : busy ? 'Agent 正在思考，请稍候…' : '输入消息，继续与 Agent 对话…'}
+          placeholder={awaitingReview ? '该工单正在等待主管审批' : busy ? '正在发送，请稍候…' : humanMode ? '输入消息，与人工客服实时沟通…' : '输入消息，继续与 Agent 对话…'}
           rows={2}
           disabled={busy || awaitingReview}
           onKeyDown={event => {
@@ -134,7 +182,7 @@ export default function TicketPage() {
         />
         <button className="send-button" disabled={busy || awaitingReview || !message.trim()}>
           {busy ? <span className="button-spinner"/> : <Send size={18}/>}
-          {busy ? '思考中' : '发送'}
+          {busy ? '发送中' : '发送'}
         </button>
       </form>
     </section>
@@ -185,13 +233,24 @@ export default function TicketPage() {
   </div>
 }
 
-function ChatMessage({ item }: { item: Message }) {
+function ChatMessage({ item, canRate, rating, onRate }: {
+  item: Message
+  canRate: boolean
+  rating?: FeedbackRating
+  onRate: (item: Message, rating: FeedbackRating) => void
+}) {
   const isCustomer = item.sender_type === 'CUSTOMER'
+  const sender = isCustomer ? '客户' : item.sender_type === 'HUMAN_AGENT' ? '人工客服' : 'MyTicket Agent'
   return <div className={`message ${isCustomer ? 'customer' : 'agent'}`}>
     <div className="message-avatar">{isCustomer ? <UserRound/> : <Bot/>}</div>
     <div>
-      <span>{isCustomer ? '客户' : 'MyTicket Agent'} · {new Date(item.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+      <span>{sender} · {new Date(item.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
       <p>{item.content}</p>
+      {canRate && item.sender_type === 'AI' && <div className="feedback-actions" aria-label="评价 Agent 回复">
+        <button className={rating === 'UP' ? 'active' : ''} title="回答有帮助" onClick={() => onRate(item, 'UP')}><ThumbsUp/></button>
+        <button className={rating === 'DOWN' ? 'active down' : ''} title="回答需要改进" onClick={() => onRate(item, 'DOWN')}><ThumbsDown/></button>
+        {rating && <small>{rating === 'UP' ? '感谢反馈' : '已加入改进队列'}</small>}
+      </div>}
     </div>
   </div>
 }

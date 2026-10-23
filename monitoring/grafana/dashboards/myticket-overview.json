@@ -85,6 +85,26 @@
       "targets": [{"expr": "sum by (tool, outcome) (increase(myticket_tool_executions_total[15m]))", "legendFormat": "{{tool}} / {{outcome}}", "refId": "A"}],
       "title": "Tool outcomes (15m)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 9,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "sum by (rating) (increase(myticket_message_feedback_total[1h]))", "legendFormat": "{{rating}}", "refId": "A"}],
+      "title": "Agent feedback (1h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "myticket-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 10,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [{"expr": "sum by (event, reason) (increase(myticket_knowledge_gaps_total[1h]))", "legendFormat": "{{event}} / {{reason}}", "refId": "A"}],
+      "title": "Knowledge flywheel outcomes (1h)",
+      "type": "timeseries"
     }
   ],
   "refresh": "15s",

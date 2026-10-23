@@ -44,6 +44,27 @@ def test_rag_trace_marks_keyword_fallback() -> None:
     assert trace["fallback_used"] is True
 
 
+def test_rag_trace_marks_vector_index_fallback() -> None:
+    trace = build_rag_trace(
+        query="退款",
+        latency_ms=2,
+        results=[
+            {
+                "chunk_id": 2,
+                "title": "退款规则",
+                "source": "policy://refund",
+                "score": 0.9,
+                "retrieval_method": "hybrid",
+                "vector_backend": "local_scan_fallback",
+            }
+        ],
+    )
+
+    assert trace["retrieval_method"] == "hybrid"
+    assert trace["vector_backend"] == "local_scan_fallback"
+    assert trace["fallback_used"] is True
+
+
 def test_memory_trace_reports_restored_state() -> None:
     previous = AgentState(
         ticket_id=1,

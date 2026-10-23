@@ -25,6 +25,19 @@ services:
       timeout: 5s
       retries: 20
 
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    profiles: ["vector"]
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "6333:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   backend:
     build:
       context: .
@@ -44,6 +57,15 @@ services:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       LLM_ENABLED: ${LLM_ENABLED:-false}
       EMBEDDING_ENABLED: ${EMBEDDING_ENABLED:-false}
+      QDRANT_ENABLED: ${QDRANT_ENABLED:-false}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      DEMO_USER_EMAIL: ${DEMO_USER_EMAIL:?Set DEMO_USER_EMAIL}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?Set DEMO_USER_PASSWORD}
+      DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:?Set DEMO_ADMIN_EMAIL}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD}
+      DEMO_AGENT_EMAIL: ${DEMO_AGENT_EMAIL:?Set DEMO_AGENT_EMAIL}
+      DEMO_AGENT_PASSWORD: ${DEMO_AGENT_PASSWORD:?Set DEMO_AGENT_PASSWORD}
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     depends_on:
       mysql:
@@ -78,6 +100,9 @@ services:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       LLM_ENABLED: ${LLM_ENABLED:-false}
       EMBEDDING_ENABLED: ${EMBEDDING_ENABLED:-false}
+      QDRANT_ENABLED: ${QDRANT_ENABLED:-false}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
     command: ["python", "run_agent_worker.py"]
     expose:
       - "9101"
@@ -128,5 +153,6 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  qdrant-data:
   prometheus-data:
   grafana-data:

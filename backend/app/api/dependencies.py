@@ -12,12 +12,13 @@ from app.repositories.user_repository import UserRepository
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
+SUPPORT_ROLES = {"agent", "supervisor", "admin"}
 
 
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> User:
     token = (
         credentials.credentials
@@ -93,4 +94,26 @@ async def require_admin(
             detail="Admin access required",
         )
 
+    return current_user
+
+
+async def require_support_agent(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if current_user.role not in SUPPORT_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Support agent access required",
+        )
+    return current_user
+
+
+async def require_supervisor(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if current_user.role not in {"supervisor", "admin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Supervisor access required",
+        )
     return current_user

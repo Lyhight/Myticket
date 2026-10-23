@@ -55,6 +55,16 @@ TOOL_EXECUTIONS = Counter(
     "Agent tool executions by bounded tool name and outcome.",
     ("tool", "outcome"),
 )
+MESSAGE_FEEDBACK = Counter(
+    "myticket_message_feedback_total",
+    "Customer feedback on Agent messages.",
+    ("rating",),
+)
+KNOWLEDGE_GAPS = Counter(
+    "myticket_knowledge_gaps_total",
+    "Knowledge-gap signals and review outcomes.",
+    ("event", "reason"),
+)
 
 _CATEGORIES = {
     "ORDER", "LOGISTICS", "REFUND", "COUPON", "ACCOUNT", "PRODUCT", "OTHER"
@@ -69,6 +79,12 @@ _TOOLS = {
     "get_logistics",
     "check_refund_eligibility",
     "create_refund_request",
+}
+_GAP_REASONS = {
+    "negative_feedback",
+    "reply_review_failed",
+    "agent_handoff",
+    "no_knowledge_evidence",
 }
 
 
@@ -123,3 +139,17 @@ def observe_agent_run(
             "success" if success is True else "failure" if success is False else "unknown"
         )
         TOOL_EXECUTIONS.labels(tool, tool_outcome).inc()
+
+
+def observe_message_feedback(rating: str) -> None:
+    MESSAGE_FEEDBACK.labels(
+        "up" if rating == "UP" else "down" if rating == "DOWN" else "other"
+    ).inc()
+
+
+def observe_knowledge_gap(event: str, reason: str) -> None:
+    bounded_event = event if event in {"detected", "approved", "rejected"} else "other"
+    KNOWLEDGE_GAPS.labels(
+        bounded_event,
+        _bounded(reason, _GAP_REASONS),
+    ).inc()

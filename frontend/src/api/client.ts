@@ -62,3 +62,37 @@ export async function* streamApi(
     }
   }
 }
+
+export async function subscribeEvents(
+  after: number,
+  signal: AbortSignal,
+  onEvent: (event: import('../types').DomainEvent) => void,
+): Promise<number> {
+  const response = await fetch(`${API_BASE}/events/stream?after=${after}`, {
+    credentials: 'include',
+    signal,
+    headers: { Accept: 'text/event-stream' },
+  })
+  if (!response.ok || !response.body) {
+    throw new ApiError(response.status, '实时事件连接失败')
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let cursor = after
+  while (true) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value, { stream: !done })
+    const frames = buffer.split('\n\n')
+    buffer = frames.pop() || ''
+    for (const frame of frames) {
+      const data = frame.split('\n')
+        .find(line => line.startsWith('data: '))?.slice(6)
+      if (!data) continue
+      const event = JSON.parse(data) as import('../types').DomainEvent
+      cursor = event.id
+      onEvent(event)
+    }
+    if (done) return cursor
+  }
+}

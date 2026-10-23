@@ -110,6 +110,12 @@ jobs:
       MYSQL_ROOT_PASSWORD: ci-compose-root-password
       JWT_SECRET: ci-only-secret-with-at-least-32-characters
       GRAFANA_ADMIN_PASSWORD: ci-grafana-password
+      DEMO_USER_EMAIL: demo@example.com
+      DEMO_USER_PASSWORD: ci-demo-user-password
+      DEMO_ADMIN_EMAIL: admin@example.com
+      DEMO_ADMIN_PASSWORD: ci-demo-admin-password
+      DEMO_AGENT_EMAIL: agent@example.com
+      DEMO_AGENT_PASSWORD: ci-demo-agent-password
     steps:
       - uses: actions/checkout@v4
       - run: docker compose --profile monitoring config --quiet

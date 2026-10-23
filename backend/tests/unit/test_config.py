@@ -33,3 +33,8 @@ def test_debug_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_worker_lease_bounds_are_validated() -> None:
     with pytest.raises(ValidationError, match="agent_task_lease_seconds"):
         settings_for_test(agent_task_lease_seconds=5)
+
+
+def test_qdrant_requires_embeddings() -> None:
+    with pytest.raises(ValidationError, match="embedding_enabled"):
+        settings_for_test(qdrant_enabled=True)

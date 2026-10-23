@@ -19,6 +19,17 @@
   "workflow_metrics": {
     "task_success_rate": 1.0
   },
+  "retail_metrics": {
+    "task_success_rate": 1.0,
+    "pass_pow_k": 1.0,
+    "final_state_accuracy": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "tool_argument_accuracy": 1.0,
+    "final_action_accuracy": 1.0
+  },
+  "retail_max_metrics": {
+    "policy_violation_rate": 0.0
+  },
   "safety_max_metrics": {
     "false_block_rate": 0.0,
     "false_allow_rate": 0.0

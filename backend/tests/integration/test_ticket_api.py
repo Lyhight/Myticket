@@ -220,7 +220,10 @@ async def test_create_list_and_get_ticket(
     assert runs[0]["state_snapshot"]["ticket_id"] == ticket["id"]
     assert runs[0]["rag_trace"]["result_count"] == 0
     assert runs[0]["memory_trace"]["long_term_memory_count"] == 0
-    assert runs[0]["context_trace"] == {}
+    assert runs[0]["context_trace"] == {
+        "orchestrator": "langgraph",
+        "orchestration_outcome": "completed",
+    }
     assert runs[0]["total_latency_ms"] >= 0
     assert runs[0]["correlation_id"] == "ticket-create-request-123"
 
@@ -411,7 +414,7 @@ async def test_message_stream_reports_stages_and_reply(
     assert events[-1]["type"] == "done"
 
 
-async def test_urgent_ticket_enters_review_and_admin_approves(
+async def test_urgent_ticket_enters_human_handoff_and_is_resolved(
     client: AsyncClient,
     mock_agent,
     admin_user,
@@ -434,12 +437,12 @@ async def test_urgent_ticket_enters_review_and_admin_approves(
 
     assert create_response.status_code == 201
     ticket = create_response.json()
-    assert ticket["status"] == "PENDING_REVIEW"
+    assert ticket["status"] == "WAITING_HUMAN"
 
     blocked_message = await client.post(
         f"/api/v1/tickets/{ticket['id']}/messages",
         headers=auth_headers(owner_token),
-        json={"content": "审批前继续发送"},
+        json={"content": "错误地进入 Agent 通道"},
     )
     assert blocked_message.status_code == 409
 
@@ -453,19 +456,47 @@ async def test_urgent_ticket_enters_review_and_admin_approves(
     assert admin_login.status_code == 200
     admin_token = admin_login.json()["access_token"]
 
-    pending_response = await client.get(
-        "/api/v1/tickets/pending",
+    queue_response = await client.get(
+        "/api/v1/tickets/handoff",
         headers=auth_headers(admin_token),
     )
-    assert pending_response.status_code == 200
-    assert len(pending_response.json()) == 1
+    assert queue_response.status_code == 200
+    assert len(queue_response.json()["waiting"]) == 1
 
-    approve_response = await client.post(
-        f"/api/v1/tickets/{ticket['id']}/approve",
+    claim_response = await client.post(
+        f"/api/v1/tickets/{ticket['id']}/claim",
         headers=auth_headers(admin_token),
     )
-    assert approve_response.status_code == 200
-    assert approve_response.json()["status"] == "RESOLVED"
+    assert claim_response.status_code == 200
+    assert claim_response.json()["status"] == "HUMAN_PROCESSING"
+
+    duplicate_claim = await client.post(
+        f"/api/v1/tickets/{ticket['id']}/claim",
+        headers=auth_headers(admin_token),
+    )
+    assert duplicate_claim.status_code == 409
+
+    customer_message = await client.post(
+        f"/api/v1/tickets/{ticket['id']}/human-messages",
+        headers=auth_headers(owner_token),
+        json={"content": "请人工帮我确认一下"},
+    )
+    assert customer_message.status_code == 200
+
+    agent_message = await client.post(
+        f"/api/v1/tickets/{ticket['id']}/human-messages",
+        headers=auth_headers(admin_token),
+        json={"content": "人工客服已处理"},
+    )
+    assert agent_message.status_code == 200
+    assert agent_message.json()["sender_type"] == "HUMAN_AGENT"
+
+    resolve_response = await client.post(
+        f"/api/v1/tickets/{ticket['id']}/resolve",
+        headers=auth_headers(admin_token),
+    )
+    assert resolve_response.status_code == 200
+    assert resolve_response.json()["status"] == "RESOLVED"
 
     mock_agent(make_agent_result())
     reopened_message = await client.post(
@@ -482,6 +513,6 @@ async def test_urgent_ticket_enters_review_and_admin_approves(
     messages = detail_response.json()["messages"]
     assert detail_response.json()["status"] == "OPEN"
     assert [item["sender_type"] for item in messages] == [
-        "CUSTOMER", "AI", "CUSTOMER", "AI",
+        "CUSTOMER", "CUSTOMER", "HUMAN_AGENT", "CUSTOMER", "AI",
     ]
-    assert messages[1]["content"] == "这是等待人工确认的回复草稿。"
+    assert messages[2]["content"] == "人工客服已处理"

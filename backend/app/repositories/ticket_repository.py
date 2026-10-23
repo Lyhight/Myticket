@@ -7,6 +7,7 @@ from app.models.agent_run import AgentRun
 from app.models.agent_task import AgentTask
 from app.models.ticket import Ticket
 from app.models.user_memory import UserMemory
+from app.models.domain_event import DomainEvent
 from datetime import datetime, timezone
 
 
@@ -94,6 +95,12 @@ class TicketRepository:
         await self.db.execute(
             delete(AgentTask).where(AgentTask.ticket_id == ticket.id)
         )
+        await self.db.execute(
+            delete(DomainEvent).where(
+                DomainEvent.aggregate_type == "ticket",
+                DomainEvent.aggregate_id == ticket.id,
+            )
+        )
         await self.db.delete(ticket)
         await self.db.commit()
     async def update_classification(
@@ -131,12 +138,31 @@ class TicketRepository:
         self,
         ticket: Ticket,
         status: str,
+        *,
+        event_type: str | None = None,
+        event_payload: dict | None = None,
+        audience_role: str | None = None,
+        audience_user_id: int | None = None,
+        escalation_reason: str | None = None,
     ) -> Ticket:
         """
         更新工单状态。
         """
 
         ticket.status = status
+        if escalation_reason is not None:
+            ticket.escalation_reason = escalation_reason
+        if status == "RESOLVED":
+            ticket.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if event_type:
+            self.db.add(DomainEvent(
+                event_type=event_type,
+                aggregate_type="ticket",
+                aggregate_id=ticket.id,
+                audience_role=audience_role,
+                audience_user_id=audience_user_id,
+                payload=event_payload or {"ticket_id": ticket.id},
+            ))
 
         await self.db.commit()
         await self.db.refresh(ticket)
@@ -179,3 +205,55 @@ class TicketRepository:
         )
 
         return list(result.scalars().all())
+
+    async def list_handoff_queue(self) -> list[Ticket]:
+        result = await self.db.execute(
+            select(Ticket)
+            .where(Ticket.status == "WAITING_HUMAN")
+            .order_by(Ticket.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def list_assigned(self, agent_id: int) -> list[Ticket]:
+        result = await self.db.execute(
+            select(Ticket)
+            .where(
+                Ticket.assigned_agent_id == agent_id,
+                Ticket.status == "HUMAN_PROCESSING",
+            )
+            .order_by(Ticket.claimed_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def claim_for_agent(self, ticket_id: int, agent_id: int) -> Ticket | None:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        result = await self.db.execute(
+            update(Ticket)
+            .where(
+                Ticket.id == ticket_id,
+                Ticket.status == "WAITING_HUMAN",
+                Ticket.assigned_agent_id.is_(None),
+            )
+            .values(
+                status="HUMAN_PROCESSING",
+                assigned_agent_id=agent_id,
+                claimed_at=now,
+                human_started_at=now,
+                version=Ticket.version + 1,
+            )
+        )
+        if result.rowcount != 1:
+            await self.db.rollback()
+            return None
+        ticket = await self.db.get(Ticket, ticket_id)
+        self.db.add(DomainEvent(
+            event_type="ticket.claimed",
+            aggregate_type="ticket",
+            aggregate_id=ticket_id,
+            audience_role="agent",
+            audience_user_id=ticket.user_id,
+            payload={"ticket_id": ticket_id, "agent_id": agent_id},
+        ))
+        await self.db.commit()
+        await self.db.refresh(ticket)
+        return ticket

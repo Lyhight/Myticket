@@ -45,6 +45,7 @@ class RetrievedKnowledgeResponse(BaseModel):
     score: float
     keyword_score: float | None = None
     vector_score: float | None = None
+    vector_backend: str | None = None
     retrieval_method: str | None = None
     citation_id: str | None = None
     document_version: int | None = None

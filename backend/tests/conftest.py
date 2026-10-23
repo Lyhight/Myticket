@@ -18,6 +18,7 @@ os.environ["JWT_SECRET"] = (
 os.environ["DASHSCOPE_API_KEY"] = "test-api-key"
 os.environ["DEBUG"] = "false"
 os.environ["EMBEDDING_ENABLED"] = "false"
+os.environ["QDRANT_ENABLED"] = "false"
 
 # 必须在环境变量设置完成后导入应用模块。
 from app.core.security import hash_password  # noqa: E402

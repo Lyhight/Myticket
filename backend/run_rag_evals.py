@@ -3,7 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from app.agent.rag import (
+from app.kb.retrieval import (
     HybridKnowledgeRetriever,
     KeywordKnowledgeRetriever,
 )

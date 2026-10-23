@@ -25,7 +25,7 @@ from app.agent.state import (
     ConversationTurn,
     PendingAction,
 )
-from app.agent.tool_executor import ToolExecutor
+from app.tools.engine import ToolExecutor
 from app.agent.tool_context import ToolExecutionContext
 from app.agent.guardrails import InputGuard
 from app.core.config import settings

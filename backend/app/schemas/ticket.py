@@ -24,6 +24,11 @@ class TicketResponse(BaseModel):
     route_to: str | None
 
     status: str
+    assigned_agent_id: int | None = None
+    escalation_reason: str | None = None
+    claimed_at: datetime | None = None
+    human_started_at: datetime | None = None
+    resolved_at: datetime | None = None
 
     created_at: datetime
     updated_at: datetime
@@ -39,6 +44,11 @@ class TicketResponse(BaseModel):
 
 class TicketDetailResponse(TicketResponse):
     messages: list[MessageResponse] = Field(default_factory=list)
+
+
+class HandoffQueueResponse(BaseModel):
+    waiting: list[TicketResponse] = Field(default_factory=list)
+    assigned: list[TicketResponse] = Field(default_factory=list)
 
 
 class TicketRejectRequest(BaseModel):

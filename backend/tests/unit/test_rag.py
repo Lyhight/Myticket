@@ -5,6 +5,7 @@ from app.agent.rag import (
     KnowledgeChunker,
 )
 from app.repositories.knowledge_repository import KnowledgeRepository
+from app.agent.vector_index import VectorSearchHit
 import pytest
 
 
@@ -26,6 +27,29 @@ class FailingEmbeddingClient:
 
     async def embed(self, texts):
         raise RuntimeError("embedding unavailable")
+
+
+class RecordingVectorIndex:
+    def __init__(self):
+        self.chunks = []
+        self.deleted_document_ids = []
+
+    async def replace_document(self, document_id, chunks):
+        self.chunks = list(chunks)
+
+    async def delete_document(self, document_id):
+        self.deleted_document_ids.append(document_id)
+
+    async def search(self, vector, *, limit, score_threshold=0.0):
+        refund = next(
+            chunk for chunk in self.chunks if "退款" in chunk.content
+        )
+        return [VectorSearchHit(chunk_id=refund.id, score=0.97)]
+
+
+class FailingVectorIndex(RecordingVectorIndex):
+    async def search(self, vector, *, limit, score_threshold=0.0):
+        raise RuntimeError("qdrant unavailable")
 
 
 def test_chunker_splits_with_overlap() -> None:
@@ -203,3 +227,56 @@ async def test_hybrid_rag_falls_back_to_keyword_search(
     assert results
     assert results[0]["source"] == "policy/points.md"
     assert results[0]["retrieval_method"] == "keyword_fallback"
+
+
+async def test_hybrid_rag_uses_qdrant_vector_index(db_session) -> None:
+    repository = KnowledgeRepository(db_session)
+    embedding_client = FakeEmbeddingClient()
+    vector_index = RecordingVectorIndex()
+    service = KnowledgeBaseService(
+        repository,
+        embedding_client=embedding_client,
+        vector_index=vector_index,
+    )
+    await service.ingest(
+        title="售后规则",
+        source="policy/indexed-refund.md",
+        content="款项会在审核后沿原支付路径退款。",
+    )
+
+    results = await HybridKnowledgeRetriever(
+        repository,
+        embedding_client=embedding_client,
+        vector_index=vector_index,
+    ).retrieve("钱退回来要走什么路径")
+
+    assert results[0]["source"] == "policy/indexed-refund.md"
+    assert results[0]["vector_backend"] == "qdrant_hnsw"
+    assert results[0]["vector_score"] == 0.97
+
+
+async def test_qdrant_failure_falls_back_to_local_vector_scan(
+    db_session,
+) -> None:
+    repository = KnowledgeRepository(db_session)
+    embedding_client = FakeEmbeddingClient()
+    vector_index = FailingVectorIndex()
+    service = KnowledgeBaseService(
+        repository,
+        embedding_client=embedding_client,
+        vector_index=vector_index,
+    )
+    await service.ingest(
+        title="售后规则",
+        source="policy/fallback-refund.md",
+        content="退款审核后会沿原支付路径返还。",
+    )
+
+    results = await HybridKnowledgeRetriever(
+        repository,
+        embedding_client=embedding_client,
+        vector_index=vector_index,
+    ).retrieve("钱退回来要走什么路径")
+
+    assert results[0]["vector_backend"] == "local_scan_fallback"
+    assert results[0]["vector_score"] == 1.0

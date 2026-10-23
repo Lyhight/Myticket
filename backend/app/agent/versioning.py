@@ -6,4 +6,4 @@ PROMPT_VERSIONS = {
     "refund_workflow": "refund-workflow-v2",
 }
 
-EVAL_DATASET_VERSION = "2026-10-11-v2"
+EVAL_DATASET_VERSION = "2026-10-23-v3"

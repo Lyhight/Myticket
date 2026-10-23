@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.models.message import Message
+from app.models.domain_event import DomainEvent
 
 
 class MessageRepository:
@@ -19,6 +20,9 @@ class MessageRepository:
         sender_type: str,
         content: str,
         operation_key: str | None = None,
+        event_type: str | None = None,
+        audience_role: str | None = None,
+        audience_user_id: int | None = None,
     ) -> Message:
 
         if operation_key:
@@ -34,6 +38,20 @@ class MessageRepository:
         )
 
         self.db.add(message)
+        await self.db.flush()
+        if event_type:
+            self.db.add(DomainEvent(
+                event_type=event_type,
+                aggregate_type="ticket",
+                aggregate_id=ticket_id,
+                audience_role=audience_role,
+                audience_user_id=audience_user_id,
+                payload={
+                    "ticket_id": ticket_id,
+                    "message_id": message.id,
+                    "sender_type": sender_type,
+                },
+            ))
 
         try:
             await self.db.commit()

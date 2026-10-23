@@ -1,7 +1,7 @@
 import { Check, ClipboardCheck, Clock3, ShieldAlert, Wrench, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { AgentRun, Ticket } from '../types'
+import type { AgentRun, DomainEvent, Ticket } from '../types'
 import Badge from '../components/Badge'
 
 export default function ReviewPage() {
@@ -20,6 +20,14 @@ export default function ReviewPage() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    const listener = (raw: Event) => {
+      const event = (raw as CustomEvent<DomainEvent>).detail
+      if (event.type === 'approval.requested') load().catch(() => undefined)
+    }
+    window.addEventListener('myticket:event', listener)
+    return () => window.removeEventListener('myticket:event', listener)
+  }, [])
 
   async function action(id: number, approve: boolean) {
     setBusyId(id)

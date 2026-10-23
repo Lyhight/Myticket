@@ -14,10 +14,17 @@ def build_rag_trace(
         if results
         else "none"
     )
+    vector_backend = (
+        str(results[0].get("vector_backend"))
+        if results and results[0].get("vector_backend")
+        else None
+    )
     return {
         "query": query,
         "retrieval_method": method,
-        "fallback_used": method == "keyword_fallback",
+        "fallback_used": method == "keyword_fallback"
+        or vector_backend == "local_scan_fallback",
+        "vector_backend": vector_backend,
         "result_count": len(results),
         "latency_ms": round(latency_ms, 3),
         "results": [
@@ -30,6 +37,7 @@ def build_rag_trace(
                     "score",
                     "keyword_score",
                     "vector_score",
+                    "vector_backend",
                     "retrieval_method",
                     "citation_id",
                     "document_version",

@@ -96,6 +96,19 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-v4"
     embedding_dimensions: int = Field(default=512, ge=64, le=2048)
     embedding_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
+    qdrant_enabled: bool = False
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = Field(default="", max_length=512)
+    qdrant_collection: str = Field(
+        default="myticket_knowledge",
+        min_length=1,
+        max_length=255,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    qdrant_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    qdrant_hnsw_m: int = Field(default=16, ge=4, le=100)
+    qdrant_hnsw_ef_construct: int = Field(default=100, ge=4, le=1000)
+    qdrant_hnsw_ef_search: int = Field(default=64, ge=4, le=1000)
     rag_top_k: int = Field(default=3, ge=1, le=10)
     rag_candidate_k: int = Field(default=10, ge=5, le=100)
     knowledge_chunk_size: int = Field(default=500, ge=100, le=5_000)
@@ -131,6 +144,10 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 "dashscope_api_key is required when LLM or embedding is enabled"
+            )
+        if self.qdrant_enabled and not self.embedding_enabled:
+            raise ValueError(
+                "embedding_enabled must be true when qdrant_enabled is true"
             )
         return self
 

@@ -2,7 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from app.agent.rag import KnowledgeBaseService
+from app.kb.service import KnowledgeBaseService
 from app.db.session import AsyncSessionLocal
 from app.repositories.knowledge_repository import KnowledgeRepository
 

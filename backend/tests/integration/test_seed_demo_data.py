@@ -25,7 +25,7 @@ async def test_seed_creates_owned_demo_data(
         ).scalars()
     )
 
-    assert stats["users_created"] == 2
+    assert stats["users_created"] == 3
     assert stats["orders_created"] == len(ORDERS)
     assert all(order.user_id == user.id for order in orders)
     logistics = list(
@@ -50,7 +50,7 @@ async def test_seed_is_idempotent(
         select(func.count()).select_from(Logistics)
     )
 
-    assert user_count == 2
+    assert user_count == 3
     assert order_count == 5
     assert logistics_count == 3
     assert second_stats["users_created"] == 0

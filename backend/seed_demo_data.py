@@ -28,7 +28,7 @@ DEMO_USER_EMAIL = os.getenv(
 )
 DEMO_USER_PASSWORD = os.getenv(
     "DEMO_USER_PASSWORD",
-    "DemoPass123!",
+    "replace-with-a-local-demo-user-password",
 )
 DEMO_ADMIN_EMAIL = os.getenv(
     "DEMO_ADMIN_EMAIL",
@@ -36,7 +36,12 @@ DEMO_ADMIN_EMAIL = os.getenv(
 )
 DEMO_ADMIN_PASSWORD = os.getenv(
     "DEMO_ADMIN_PASSWORD",
-    "AdminPass123!",
+    "replace-with-a-local-demo-admin-password",
+)
+DEMO_AGENT_EMAIL = os.getenv("DEMO_AGENT_EMAIL", "agent@example.com")
+DEMO_AGENT_PASSWORD = os.getenv(
+    "DEMO_AGENT_PASSWORD",
+    "replace-with-a-local-demo-agent-password",
 )
 
 SYNTHETIC_ORDER_PATH = (
@@ -117,15 +122,33 @@ async def get_or_create_demo_admin(
     return user, True
 
 
+async def get_or_create_demo_agent(db: AsyncSession) -> tuple[User, bool]:
+    result = await db.execute(select(User).where(User.email == DEMO_AGENT_EMAIL))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        return user, False
+    user = User(
+        email=DEMO_AGENT_EMAIL,
+        password_hash=hash_password(DEMO_AGENT_PASSWORD),
+        role="agent",
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+    return user, True
+
+
 async def seed_database(
     db: AsyncSession,
 ) -> dict[str, int]:
     demo_user, user_created = await get_or_create_demo_user(db)
     _, admin_created = await get_or_create_demo_admin(db)
+    _, agent_created = await get_or_create_demo_agent(db)
     stats = {
-        "users_created": int(user_created) + int(admin_created),
+        "users_created": int(user_created) + int(admin_created) + int(agent_created),
         "customers_created": int(user_created),
         "admins_created": int(admin_created),
+        "agents_created": int(agent_created),
         "orders_created": 0,
         "orders_assigned": 0,
         "orders_preserved": 0,
@@ -178,6 +201,7 @@ async def seed() -> None:
     print("Seeding done.")
     print(f"Demo user: {DEMO_USER_EMAIL}")
     print(f"Demo admin: {DEMO_ADMIN_EMAIL}")
+    print(f"Demo agent: {DEMO_AGENT_EMAIL}")
     print("Password: value of DEMO_USER_PASSWORD")
     print(f"Summary: {stats}")
 

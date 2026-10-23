@@ -1,5 +1,6 @@
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 
@@ -115,10 +116,49 @@ class KnowledgeRepository:
             chunk.embedding_model = embedding_model
         await self.db.commit()
 
+    async def list_document_chunks(
+        self,
+        document_id: int,
+    ) -> list[KnowledgeChunk]:
+        result = await self.db.execute(
+            select(KnowledgeChunk)
+            .where(KnowledgeChunk.document_id == document_id)
+            .order_by(KnowledgeChunk.chunk_index)
+        )
+        return list(result.scalars().all())
+
+    async def get_active_chunks_by_ids(
+        self,
+        chunk_ids: list[int],
+    ) -> list[tuple[KnowledgeChunk, KnowledgeDocument]]:
+        if not chunk_ids:
+            return []
+        result = await self.db.execute(
+            select(KnowledgeChunk, KnowledgeDocument)
+            .join(
+                KnowledgeDocument,
+                KnowledgeDocument.id == KnowledgeChunk.document_id,
+            )
+            .where(
+                KnowledgeChunk.id.in_(chunk_ids),
+                KnowledgeDocument.is_active.is_(True),
+            )
+        )
+        rows_by_id = {
+            chunk.id: (chunk, document)
+            for chunk, document in result.all()
+        }
+        return [
+            rows_by_id[chunk_id]
+            for chunk_id in chunk_ids
+            if chunk_id in rows_by_id
+        ]
+
     async def list_active_chunks(
         self,
         *,
         limit: int | None = None,
+        include_embeddings: bool = True,
     ) -> list[tuple[KnowledgeChunk, KnowledgeDocument]]:
         statement = (
             select(KnowledgeChunk, KnowledgeDocument)
@@ -129,6 +169,8 @@ class KnowledgeRepository:
             .where(KnowledgeDocument.is_active.is_(True))
             .order_by(KnowledgeDocument.id, KnowledgeChunk.chunk_index)
         )
+        if not include_embeddings:
+            statement = statement.options(defer(KnowledgeChunk.embedding))
         if limit is not None:
             statement = statement.limit(limit)
         result = await self.db.execute(statement)

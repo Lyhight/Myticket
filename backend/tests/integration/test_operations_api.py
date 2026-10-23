@@ -22,6 +22,7 @@ async def test_readiness_and_request_headers(client: AsyncClient) -> None:
         "status": "ready",
         "database": True,
         "rate_limit_backend": "memory",
+        "vector_index": "disabled",
     }
     assert response.headers["X-Request-ID"] == "test-request-id"
     assert float(response.headers["X-Response-Time-Ms"]) >= 0

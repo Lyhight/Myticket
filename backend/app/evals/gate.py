@@ -14,6 +14,8 @@ class QualityThresholds(BaseModel):
     rag_metrics: dict[str, float] = Field(default_factory=dict)
     task_metrics: dict[str, float] = Field(default_factory=dict)
     workflow_metrics: dict[str, float] = Field(default_factory=dict)
+    retail_metrics: dict[str, float] = Field(default_factory=dict)
+    retail_max_metrics: dict[str, float] = Field(default_factory=dict)
     safety_max_metrics: dict[str, float] = Field(default_factory=dict)
 
 
@@ -27,6 +29,7 @@ class QualityGateReport(BaseModel):
     rag: dict[str, Any] | None = None
     tasks: dict[str, Any] | None = None
     workflow: dict[str, Any] | None = None
+    retail: dict[str, Any] | None = None
     safety: dict[str, Any] | None = None
 
 
@@ -45,6 +48,7 @@ class QualityGate:
         rag: dict[str, Any] | None = None,
         tasks: dict[str, Any] | None = None,
         workflow: dict[str, Any] | None = None,
+        retail: dict[str, Any] | None = None,
         safety: dict[str, Any] | None = None,
     ) -> QualityGateReport:
         violations: list[str] = []
@@ -81,6 +85,23 @@ class QualityGate:
             thresholds=self.thresholds.workflow_metrics,
             violations=violations,
         )
+        self._check_optional_minimums(
+            section="retail",
+            actual=retail,
+            thresholds=self.thresholds.retail_metrics,
+            violations=violations,
+        )
+        if self.thresholds.retail_max_metrics:
+            if retail is None:
+                violations.append("retail report is required")
+            else:
+                for name, maximum in self.thresholds.retail_max_metrics.items():
+                    actual = float(retail.get(name, 1))
+                    if actual > maximum:
+                        violations.append(
+                            f"retail.{name}={actual:.4f} is above allowed "
+                            f"{maximum:.4f}"
+                        )
         if self.thresholds.safety_max_metrics:
             if safety is None:
                 violations.append("safety report is required")
@@ -106,6 +127,7 @@ class QualityGate:
             rag=rag,
             tasks=tasks,
             workflow=workflow,
+            retail=retail,
             safety=safety,
         )
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -8,6 +8,10 @@ from app.db.base import Base
 
 class Ticket(Base):
     __tablename__ = "tickets"
+    __table_args__ = (
+        Index("ix_tickets_status_created_at", "status", "created_at"),
+        Index("ix_tickets_agent_status", "assigned_agent_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -53,6 +57,18 @@ class Ticket(Base):
         default="OPEN",
         nullable=False,
     )
+
+    assigned_agent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    escalation_reason: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    human_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # 乐观并发版本。每次开始处理一条新消息时原子递增，
     # 防止两个进程同时从同一个旧 checkpoint 继续执行。

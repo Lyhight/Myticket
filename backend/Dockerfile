@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir .
 
 COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
-COPY backend/run_agent_worker.py backend/seed_demo_data.py backend/seed_knowledge_base.py ./
+COPY backend/run_agent_worker.py backend/seed_demo_data.py backend/seed_knowledge_base.py backend/reindex_vector_store.py ./
 COPY synthetic_data /synthetic_data
 
 RUN useradd --create-home --uid 10001 appuser \

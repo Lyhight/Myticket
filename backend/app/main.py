@@ -17,6 +17,8 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.tickets import router as tickets_router
 from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.operations import router as operations_router
+from app.api.v1.events import router as events_router
+from app.api.v1.feedback import router as feedback_router
 from app.operations.rate_limit import close_rate_limit_backend
 from app.core.logging import (
     configure_logging,
@@ -199,5 +201,13 @@ app.include_router(
 )
 app.include_router(
     operations_router,
+    prefix="/api/v1",
+)
+app.include_router(
+    events_router,
+    prefix="/api/v1",
+)
+app.include_router(
+    feedback_router,
     prefix="/api/v1",
 )

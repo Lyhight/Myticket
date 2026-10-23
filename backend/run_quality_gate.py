@@ -7,11 +7,12 @@ from pathlib import Path
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("JWT_SECRET", "eval-only-secret-not-for-production-use")
 
-from app.agent.rag import KeywordKnowledgeRetriever
+from app.kb.retrieval import KeywordKnowledgeRetriever
 from app.db.session import AsyncSessionLocal
 from app.evals.gate import QualityGate
 from app.evals.rag_runner import RagEvalRunner
 from app.evals.runner import AgentEvalRunner
+from app.evals.retail_runner import RetailToolEvalRunner
 from app.evals.safety_runner import SafetyEvalRunner
 from app.evals.task_runner import AgentTaskEvalRunner, OfflineWorkflowTaskExecutor
 from app.repositories.knowledge_repository import KnowledgeRepository
@@ -38,6 +39,9 @@ async def main() -> int:
         OfflineWorkflowTaskExecutor(),
         evaluation_mode="offline_agent_workflow_with_fake_tools",
     ).run_file(dataset_root / "workflow_smoke.json")
+    retail_report = await RetailToolEvalRunner().run_file(
+        dataset_root / "retail_tool_tasks.json"
+    )
     rag_summary = None
     if not args.skip_rag:
         async with AsyncSessionLocal() as db:
@@ -57,6 +61,7 @@ async def main() -> int:
         rag=rag_summary,
         tasks=task_report.summary(),
         workflow=workflow_report.summary(),
+        retail=retail_report.summary(),
         safety=safety_report.summary(),
     )
     output = json.dumps(report.model_dump(), ensure_ascii=False, indent=2)

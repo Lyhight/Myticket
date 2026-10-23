@@ -83,3 +83,23 @@ def test_quality_gate_checks_workflow_regression() -> None:
     assert report.violations == [
         "workflow.task_success_rate=0.8000 is below required 1.0000"
     ]
+
+
+def test_quality_gate_checks_retail_state_and_policy_metrics() -> None:
+    gate = QualityGate(QualityThresholds(
+        overall_accuracy=0.9,
+        retail_metrics={"final_state_accuracy": 1.0, "pass_pow_k": 1.0},
+        retail_max_metrics={"policy_violation_rate": 0.0},
+    ))
+
+    report = gate.evaluate(
+        agent=_agent(1.0),
+        retail={
+            "final_state_accuracy": 0.8,
+            "pass_pow_k": 0.7,
+            "policy_violation_rate": 0.1,
+        },
+    )
+
+    assert report.passed is False
+    assert len(report.violations) == 3

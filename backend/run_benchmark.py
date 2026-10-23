@@ -14,6 +14,7 @@ os.environ.setdefault(
 
 from app.agent.versioning import EVAL_DATASET_VERSION, PROMPT_VERSIONS
 from app.evals.reporting import write_report_bundle
+from app.evals.retail_runner import RetailToolEvalRunner
 from app.evals.runner import AgentEvalRunner
 from app.evals.safety_runner import SafetyEvalRunner
 from app.evals.task_runner import AgentTaskEvalRunner, OfflineWorkflowTaskExecutor
@@ -47,6 +48,7 @@ async def main() -> int:
     task_dataset = dataset_root / "agent_tasks.json"
     safety_dataset = dataset_root / "safety_cases.json"
     workflow_dataset = dataset_root / "workflow_smoke.json"
+    retail_dataset = dataset_root / "retail_tool_tasks.json"
     rag_dataset = backend_root / "evals" / "rag_cases.json"
 
     component_report = await AgentEvalRunner().run_file(
@@ -62,15 +64,17 @@ async def main() -> int:
         OfflineWorkflowTaskExecutor(),
         evaluation_mode="offline_agent_workflow_with_fake_tools",
     ).run_file(workflow_dataset)
+    retail_report = await RetailToolEvalRunner().run_file(retail_dataset)
     reports = {
         "agent_components": component_report.summary(),
         "agent_tasks": task_report.summary(),
         "safety": safety_report.summary(),
         "agent_workflow_smoke": workflow_report.summary(),
+        "retail_tool_agent": retail_report.summary(),
     }
 
     if not args.skip_rag:
-        from app.agent.rag import (
+        from app.kb.retrieval import (
             HybridKnowledgeRetriever,
             KeywordKnowledgeRetriever,
         )
@@ -98,6 +102,7 @@ async def main() -> int:
         task_dataset,
         safety_dataset,
         workflow_dataset,
+        retail_dataset,
     ]
     if not args.skip_rag:
         dataset_paths.append(rag_dataset)

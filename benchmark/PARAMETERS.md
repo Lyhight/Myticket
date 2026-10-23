@@ -32,6 +32,7 @@
 - 本地自动测试主要使用 SQLite 和 Redis mock；CI 已配置 MySQL 8.4、真实 Redis 往返与数据库 RAG 门禁，但仍需由 GitHub Actions 实际执行验证。发布前还需要真实模型沙箱和故障注入测试。
 - Prometheus 已覆盖 HTTP、Worker、Agent、RAG 和 Tool 的低基数指标，并提供单机 Grafana 仪表盘与告警规则；多副本应由 Prometheus 分别抓取并聚合。`AgentRun` 提供持久化业务记录和 correlation ID，但日志仍需接入实际 Loki/ELK，告警还需连接 Alertmanager/on-call 渠道，并用真实流量验证保留期、SLO 阈值和告警噪声。
 - `offline_agent_workflow_with_fake_tools` 会遍历真实 Agent 状态机，但工具返回值是确定性的替身；它不能替代真实 MySQL、外部模型和并发 worker 的端到端成功率。
+- `tau_bench_inspired_offline_retail` 增加了可变业务状态、工具轨迹、参数、策略违规和 `Pass^k` 检查，能发现“回复看似正确但数据库状态错误”的问题；当前 10 个自建用例、每例 3 次仍只是回归集，不是官方 τ-bench 或生产流量验证。后续应接入受控模型沙箱、扩充人工盲标任务并运行真实 MySQL 工具链。
 - 本次 `latest` 报告使用 `--skip-rag`，因此不包含可对外宣称的 Recall@5/MRR@10 实测值；必须在已迁移、已灌入知识库的数据库上单独运行关键词与 Hybrid 实验。
 - 浏览器已改用 `HttpOnly`、`SameSite=Strict` Cookie；公网 HTTPS 部署必须设置 `AUTH_COOKIE_SECURE=true`，若未来放宽 SameSite 或允许跨站前端，还必须增加独立 CSRF Token 校验。
 - 物流数据现在按 `user_id` 隔离；升级已有数据库后需重新运行演示数据初始化，为旧的空归属物流记录补齐所有者。
